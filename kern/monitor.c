@@ -59,6 +59,37 @@ int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 {
 	// Your code here.
+	__asm__ __volatile__("":::"memory");
+	uint32_t *ebp;
+	uint32_t eip, arg0, arg1, arg2, arg3, arg4;
+	ebp = (uint32_t*) read_ebp();
+
+	cprintf("Stack backtrace:\n");
+
+	while (ebp != 0) {
+		eip = ebp[1];
+		arg0 = ebp[2];
+		arg1 = ebp[3];
+		arg2 = ebp[4];
+		arg3 = ebp[5];
+		arg4 = ebp[6];
+		cprintf(" ebp %08x eip %08x args %08x %08x %08x %08x %08x\n", ebp, eip,
+				arg0, arg1, arg2, arg3, arg4);
+
+		struct Eipdebuginfo info;
+		debuginfo_eip(eip, &info);
+		cprintf("        %s:%d: %.*s+%d\n", \
+					info.eip_file, info.eip_line, info.eip_fn_namelen, info.eip_fn_name, eip - info.eip_fn_addr);
+
+		ebp = (uint32_t*) ebp[0];
+		eip = ebp[1];
+		arg0 = ebp[2];
+		arg1 = ebp[3];
+		arg2 = ebp[4];
+		arg3 = ebp[5];
+		arg4 = ebp[6];
+	}
+
 	return 0;
 }
 
