@@ -1,13 +1,14 @@
 /* See COPYRIGHT for copyright information. */
 
-#include <inc/x86.h>
-#include <inc/mmu.h>
-#include <inc/error.h>
-#include <inc/string.h>
-#include <inc/assert.h>
+#include "pmap.h"
 
-#include <kern/pmap.h>
-#include <kern/kclock.h>
+#include "../inc/mmu.h"
+#include "../inc/stdio.h"
+#include "../inc/string.h"
+#include "../inc/types.h"
+#include "../inc/x86.h"
+#include "../inc/error.h"
+#include "kclock.h"
 
 // These variables are set by i386_detect_memory()
 size_t npages;			// Amount of physical memory (in pages)
@@ -258,14 +259,6 @@ page_init(void)
 	// NB: DO NOT actually touch the physical memory corresponding to
 	// free pages!
 	//page_free_list = NULL;
-	/*
-	size_t i;
-	for (i = 0; i < npages; i++) {
-		pages[i].pp_ref = 0;
-		pages[i].pp_link = page_free_list;
-		page_free_list = &pages[i];
-	}
-	*/
 
 	/*
 	**	preserve IO hole + kern_pgdir + pages:
@@ -310,8 +303,9 @@ page_init(void)
 struct PageInfo *
 page_alloc(int alloc_flags)
 {
-	if(!page_free_list)
+	if(!page_free_list) {
 		return NULL;
+	}
 
 	struct PageInfo *ret = page_free_list;
 	page_free_list = page_free_list->pp_link;
@@ -384,7 +378,33 @@ pte_t *
 pgdir_walk(pde_t *pgdir, const void *va, int create)
 {
 	// Fill this function in
-	return NULL;
+	// Notice that the *pt is physical address!!!
+	pde_t *pde;
+	pte_t *ptep = NULL;
+	void *pt_kva;
+
+	pde = pgdir + PDX(va);
+
+	if (*pde & PTE_P) {
+		pt_kva = (void*) KADDR (PTE_ADDR (*pde));
+		return (pte_t*) pt_kva + PTX (va);
+	}
+
+	if (create == false) {
+		return NULL;
+	}
+
+	struct PageInfo *new_ptep = page_alloc(ALLOC_ZERO);
+
+	if(!new_ptep){
+		return NULL;
+	}
+
+	new_ptep->pp_ref = 1;
+	*pde = page2pa(new_ptep) | PTE_P | PTE_U;
+
+	ptep = page2kva(new_ptep);
+	return ptep + PTX(va);
 }
 
 //
@@ -402,6 +422,13 @@ static void
 boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm)
 {
 	// Fill this function in
+	int i;
+	pte_t* pte;
+	int pgNum = (size % PGSIZE == 0) ? (size/PGSIZE) : (size/PGSIZE + 1);
+	for (i = 0; i < pgNum; i++) {
+		pte = pgdir_walk(pgdir, (void *)va + i*PGSIZE, 1);
+		*pte = (pa + i*PGSIZE) & PTE_P;
+	}
 }
 
 //
@@ -433,7 +460,24 @@ int
 page_insert(pde_t *pgdir, struct PageInfo *pp, void *va, int perm)
 {
 	// Fill this function in
-	return 0;
+	pte_t* pte = pgdir_walk(pgdir, va, true);
+
+	if (pte == NULL) {
+		return -E_NO_MEM;
+	}
+
+	if( pa2page(*pte) != pp ){
+ 		page_remove(pgdir, va);
+ 		pp->pp_ref++;
+ 	}
+
+
+ 	*pte = page2pa(pp) | perm | PTE_P;
+ 	/* we should also change pde's perm*/
+ 	pde_t *pde = pgdir + PDX(va);
+ 	*pde = *pde | perm;
+
+ 	return 0;
 }
 
 //
@@ -451,7 +495,17 @@ struct PageInfo *
 page_lookup(pde_t *pgdir, void *va, pte_t **pte_store)
 {
 	// Fill this function in
-	return NULL;
+	pte_t* pte = pgdir_walk(pgdir, va, false);
+
+	if (!pte) {
+		return NULL;
+	}
+
+	if (pte_store != 0) {
+		*pte_store = pte;
+	}
+
+	return pa2page(*pte);
 }
 
 //
@@ -473,6 +527,16 @@ void
 page_remove(pde_t *pgdir, void *va)
 {
 	// Fill this function in
+	pte_t *pte_store;
+	struct PageInfo *page = page_lookup(pgdir, va, &pte_store);
+
+	if(!page) {
+		return;
+	}
+
+	page_decref(page);
+	*pte_store = 0;
+	tlb_invalidate(pgdir, va);
 }
 
 //
