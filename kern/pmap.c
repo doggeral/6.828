@@ -154,7 +154,8 @@ mem_init(void)
 	// array.  'npages' is the number of physical pages in memory.  Use memset
 	// to initialize all fields of each struct PageInfo to 0.
 	// Your code goes here:
-	pages = (struct PageInfo *) boot_alloc(npages * sizeof(struct PageInfo));
+	size_t pages_size = npages * sizeof(struct PageInfo);
+	pages = (struct PageInfo *) boot_alloc(pages_size);
 	memset(pages, 0, npages * sizeof(struct PageInfo));
 
 	//////////////////////////////////////////////////////////////////////
@@ -179,6 +180,7 @@ mem_init(void)
 	//      (ie. perm = PTE_U | PTE_P)
 	//    - pages itself -- kernel RW, user NONE
 	// Your code goes here:
+	boot_map_region(kern_pgdir, UPAGES, ROUNDUP(pages_size, PGSIZE), PADDR(pages), PTE_U);
 
 	//////////////////////////////////////////////////////////////////////
 	// Use the physical memory that 'bootstack' refers to as the kernel
@@ -191,6 +193,7 @@ mem_init(void)
 	//       overwrite memory.  Known as a "guard page".
 	//     Permissions: kernel RW, user NONE
 	// Your code goes here:
+	boot_map_region(kern_pgdir, KSTACKTOP-KSTKSIZE, KSTKSIZE, PADDR(bootstack), PTE_W);
 
 	//////////////////////////////////////////////////////////////////////
 	// Map all of physical memory at KERNBASE.
@@ -200,6 +203,7 @@ mem_init(void)
 	// we just set up the mapping anyway.
 	// Permissions: kernel RW, user NONE
 	// Your code goes here:
+	boot_map_region(kern_pgdir, KERNBASE, ROUNDUP(((2^32) - KERNBASE), PGSIZE), 0, PTE_W);
 
 	// Check that the initial page directory has been set up correctly.
 	check_kern_pgdir();
@@ -422,13 +426,24 @@ static void
 boot_map_region(pde_t *pgdir, uintptr_t va, size_t size, physaddr_t pa, int perm)
 {
 	// Fill this function in
-	int i;
+	int32_t i;
 	pte_t* pte;
-	int pgNum = (size % PGSIZE == 0) ? (size/PGSIZE) : (size/PGSIZE + 1);
+	pde_t* pde;
+	int32_t pgNum = (size % PGSIZE == 0) ? (size / PGSIZE) : (size / PGSIZE + 1);
 	for (i = 0; i < pgNum; i++) {
-		pte = pgdir_walk(pgdir, (void *)va + i*PGSIZE, 1);
-		*pte = (pa + i*PGSIZE) & PTE_P;
+		pte = pgdir_walk(pgdir, (void *) (va), true);
+		*pte = (pa) | perm | PTE_P;
+
+		pde = pgdir + PDX(va);
+		*pde = *pde | perm;
+
+		if( va > 0xFFFFFFFF - PGSIZE) {
+			return;
+		}
+		pa += PGSIZE;
+		va += PGSIZE;
 	}
+
 }
 
 //
@@ -711,8 +726,10 @@ check_kern_pgdir(void)
 
 	// check pages array
 	n = ROUNDUP(npages*sizeof(struct PageInfo), PGSIZE);
-	for (i = 0; i < n; i += PGSIZE)
-		assert(check_va2pa(pgdir, UPAGES + i) == PADDR(pages) + i);
+	for (i = 0; i < n; i += PGSIZE) {
+		cprintf("check_va2pa(pgdir, UPAGES + i) is %d, PADDR(pages) + i is %d \n",
+				check_va2pa(pgdir, UPAGES + i), PADDR(pages) + i);
+		assert(check_va2pa(pgdir, UPAGES + i) == PADDR(pages) + i);}
 
 
 	// check phys mem
