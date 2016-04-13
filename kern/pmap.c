@@ -135,6 +135,7 @@ mem_init(void)
 
 	//////////////////////////////////////////////////////////////////////
 	// create initial page directory.
+	// User space and kernel space share the same virtual page table.
 	kern_pgdir = (pde_t *) boot_alloc(PGSIZE);
 	memset(kern_pgdir, 0, PGSIZE);
 
@@ -566,6 +567,34 @@ tlb_invalidate(pde_t *pgdir, void *va)
 	invlpg(va);
 }
 
+// Show the mapping from va to pa
+void showmappings(uint32_t s_laddr, uint32_t e_laddr) {
+	while(s_laddr < e_laddr) {
+		pte_t * pte = pgdir_walk(kern_pgdir, (void *) s_laddr, 0);
+
+		cprintf ("0x%x - 0x%x", s_laddr, s_laddr + PGSIZE);
+
+		if (pte == NULL || !(*pte & PTE_P)) {
+			cprintf ("not mapped\n");
+		} else {
+			cprintf ("0x%x", PTE_ADDR (*pte));
+			if (*pte & PTE_U) {
+				cprintf ("user: ");
+			} else {
+				cprintf ("kernel: ");
+			}
+
+			if (*pte & PTE_W) {
+				cprintf ("read/write");
+			} else {
+				cprintf ("read only");
+			}
+
+			cprintf ("\n");
+		}
+		s_laddr += PGSIZE;
+	}
+}
 
 // --------------------------------------------------------------
 // Checking functions.

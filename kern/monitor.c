@@ -10,6 +10,7 @@
 #include <kern/console.h>
 #include <kern/monitor.h>
 #include <kern/kdebug.h>
+#include <kern/pmap.h>
 
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 
@@ -24,6 +25,7 @@ struct Command {
 static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
+	{ "showmappings", "Show mappings between physical addr and virtual addr", mon_showmappings },
 };
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
@@ -93,7 +95,22 @@ mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 	return 0;
 }
 
-
+int
+mon_showmappings(int argc, char **argv, struct Trapframe *tf) {
+	if (argc != 3) {
+		cprintf("Usage: showmappings [LOWER_ADDR] [UPPER_ADDR]\n");
+		return 0;
+	}
+	uint32_t s_vaddr = strtol(argv[1], 0, 0);
+	uint32_t e_vaddr = strtol(argv[2], 0, 0);
+	if (s_vaddr != ROUNDUP(s_vaddr, PGSIZE) || e_vaddr != ROUNDUP(e_vaddr, PGSIZE)
+			|| s_vaddr > e_vaddr) {
+		cprintf("showmappings: Invalid address\n");
+		return 0;
+	}
+	showmappings(s_vaddr, e_vaddr);
+	return 0;
+}
 
 /***** Kernel monitor command interpreter *****/
 
