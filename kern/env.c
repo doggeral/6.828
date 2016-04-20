@@ -523,7 +523,7 @@ env_run(struct Env *e)
 	curenv->env_runs++;
 	cprintf("num: %d\n", curenv->env_runs);
 	cprintf("eip: %x\n", curenv->env_tf.tf_eip);
-	//lcr3((uint32_t)curenv->env_pgdir);
+	lcr3(PADDR(curenv->env_pgdir));
 
 	env_pop_tf(&(curenv->env_tf));
 }
