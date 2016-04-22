@@ -74,11 +74,6 @@
 #define T_DEFAULT   500		// catchall
 #endif
 
-/*
-* code from xv6
-* if(!($i == 8 || ($i >= 10 && $i <= 14) || $i == 17)){
-*        print "  pushl \$0\n";
-*/
 #if 0
 TRAPHANDLER_NOEC(t_divide_handler, T_DIVIDE);		//0
 TRAPHANDLER_NOEC(t_debug_handler, T_DEBUG);			//1
@@ -121,6 +116,8 @@ TRAPHANDLER_NOEC(vector16, T_FPERR);			//16
 TRAPHANDLER(vector17, T_ALIGN);	//17
 TRAPHANDLER_NOEC(vector18, T_MCHK);			//18
 TRAPHANDLER_NOEC(vector19, T_SIMDERR);		//19
+//System call
+TRAPHANDLER_NOEC(vector48, T_SIMDERR);		//19
 /*
  * Lab 3: Your code here for _alltraps
  */
