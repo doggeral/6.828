@@ -278,15 +278,17 @@ region_alloc(struct Env *e, void *va, size_t len)
 	//   You should round va down, and round (va + len) up.
 	//   (Watch out for corner-cases!)
 	size_t lowerVA = ROUNDDOWN((uint32_t)va, PGSIZE);
-	size_t upperVA = ROUNDUP((uint32_t)va + len, PGSIZE);
+	size_t length = ROUNDUP((uint32_t)len, PGSIZE);
 
 	size_t vaddr = lowerVA;
-	for (; vaddr<= upperVA; vaddr += PGSIZE) {
-		struct PageInfo* newPage = page_alloc(true);
+	for (; length >0; length-=PGSIZE, vaddr += PGSIZE) {
+		struct PageInfo* newPage = page_alloc(!ALLOC_ZERO);
 
 		if (newPage == NULL) {
 			panic("no physical mem!!");
 		}
+
+		pte_t *ptep = pgdir_walk(e->env_pgdir, va, true);
 
 		page_insert(e->env_pgdir, newPage, (void *)vaddr, PTE_U | PTE_W);
 	}
@@ -510,7 +512,6 @@ env_run(struct Env *e)
 	// LAB 3: Your code here.
 
 	//panic("env_run not yet implemented");
-	cprintf("Running env!\n");
 	if (curenv != NULL) {
 		if (curenv->env_status == ENV_RUNNING) {
 			curenv->env_status = ENV_RUNNABLE;
@@ -521,9 +522,8 @@ env_run(struct Env *e)
 	curenv->env_status = ENV_RUNNING;
 
 	curenv->env_runs++;
-	cprintf("num: %d\n", curenv->env_runs);
-	cprintf("eip: %x\n", curenv->env_tf.tf_eip);
 	lcr3(PADDR(curenv->env_pgdir));
 
 	env_pop_tf(&(curenv->env_tf));
 }
+
