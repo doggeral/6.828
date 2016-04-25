@@ -11,6 +11,7 @@
 #include <kern/monitor.h>
 #include <kern/kdebug.h>
 #include <kern/trap.h>
+#include <kern/pmap.h>
 
 #define CMDBUF_SIZE	80	// enough for one VGA text line
 
@@ -25,6 +26,7 @@ struct Command {
 static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
+	{ "showmappings", "Show mappings between physical addr and virtual addr", mon_showmappings },
 };
 #define NCOMMANDS (sizeof(commands)/sizeof(commands[0]))
 
@@ -60,10 +62,56 @@ int
 mon_backtrace(int argc, char **argv, struct Trapframe *tf)
 {
 	// Your code here.
+	__asm__ __volatile__("":::"memory");
+	uint32_t *ebp;
+	uint32_t eip, arg0, arg1, arg2, arg3, arg4;
+	ebp = (uint32_t*) read_ebp();
+
+	cprintf("Stack backtrace:\n");
+
+	while (ebp != 0) {
+		eip = ebp[1];
+		arg0 = ebp[2];
+		arg1 = ebp[3];
+		arg2 = ebp[4];
+		arg3 = ebp[5];
+		arg4 = ebp[6];
+		cprintf(" ebp %08x eip %08x args %08x %08x %08x %08x %08x\n", ebp, eip,
+				arg0, arg1, arg2, arg3, arg4);
+
+		struct Eipdebuginfo info;
+		debuginfo_eip(eip, &info);
+		cprintf("        %s:%d: %.*s+%d\n", \
+					info.eip_file, info.eip_line, info.eip_fn_namelen, info.eip_fn_name, eip - info.eip_fn_addr);
+
+		ebp = (uint32_t*) ebp[0];
+		eip = ebp[1];
+		arg0 = ebp[2];
+		arg1 = ebp[3];
+		arg2 = ebp[4];
+		arg3 = ebp[5];
+		arg4 = ebp[6];
+	}
+
 	return 0;
 }
 
-
+int
+mon_showmappings(int argc, char **argv, struct Trapframe *tf) {
+	if (argc != 3) {
+		cprintf("Usage: showmappings [LOWER_ADDR] [UPPER_ADDR]\n");
+		return 0;
+	}
+	uint32_t s_vaddr = strtol(argv[1], 0, 0);
+	uint32_t e_vaddr = strtol(argv[2], 0, 0);
+	if (s_vaddr != ROUNDUP(s_vaddr, PGSIZE) || e_vaddr != ROUNDUP(e_vaddr, PGSIZE)
+			|| s_vaddr > e_vaddr) {
+		cprintf("showmappings: Invalid address\n");
+		return 0;
+	}
+	showmappings(s_vaddr, e_vaddr);
+	return 0;
+}
 
 /***** Kernel monitor command interpreter *****/
 
