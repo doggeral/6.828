@@ -10,6 +10,7 @@
 #include "../inc/types.h"
 #include "../inc/x86.h"
 #include "../inc/error.h"
+#include "../inc/memlayout.h"
 
 // These variables are set by i386_detect_memory()
 size_t npages;			// Amount of physical memory (in pages)
@@ -275,6 +276,13 @@ mem_init_mp(void)
 	//
 	// LAB 4: Your code here:
 
+	int i = 0;
+	for (; i<NCPU; i++) {
+		// refer to memlayout.h
+		boot_map_region(kern_pgdir, KSTACKTOP - i * (KSTKSIZE + KSTKGAP) - KSTKSIZE,
+				KSTKSIZE, PADDR(percpu_kstacks[i]), PTE_W);
+	}
+
 }
 
 // --------------------------------------------------------------
@@ -325,6 +333,7 @@ page_init(void)
 	size_t lower_num = PGNUM(IOPHYSMEM);
 	//volatile size_t upper_num = PGNUM( (ROUNDUP( EXTPHYSMEM + PGSIZE + npages * sizeof(struct PageInfo), PGSIZE )));
 	size_t upper_num = PGNUM(PADDR(boot_alloc(0)));
+	size_t mpentry = PGNUM(MPENTRY_PADDR);
 
 	assert(lower_num < npages);
 	assert(upper_num < npages);
@@ -335,7 +344,9 @@ page_init(void)
 		/* preserve the real-mode IDT and BIOS structures */
 		if(i == 0) { continue; }
 
-		if(i >= lower_num && i < upper_num) { continue; }
+		if((i >= lower_num && i < upper_num) || (i == mpentry)) {
+			continue;
+		}
 
 		/* insert into page_free_list */
 		pages[i].pp_link = page_free_list;
@@ -649,7 +660,19 @@ mmio_map_region(physaddr_t pa, size_t size)
 	// Hint: The staff solution uses boot_map_region.
 	//
 	// Your code here:
-	panic("mmio_map_region not implemented");
+	size = ROUNDUP(size, PGSIZE);
+
+	if(base + size >= MMIOLIM) {
+		panic("exceed MMIOLIM!!");
+	}
+
+	boot_map_region(kern_pgdir, base, size, pa, PTE_PCD | PTE_PWT | PTE_W);
+
+	void *r = (void *) base;
+	base += size;
+	return r;
+
+	//panic("mmio_map_region not implemented");
 }
 
 static uintptr_t user_mem_check_addr;
