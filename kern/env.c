@@ -550,6 +550,9 @@ env_run(struct Env *e)
 	curenv->env_runs++;
 	lcr3(PADDR(curenv->env_pgdir));
 
+	//Release the lock before switching back to user mode.
+	unlock_kernel();
+
 	env_pop_tf(&(curenv->env_tf));
 }
 
