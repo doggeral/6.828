@@ -114,23 +114,15 @@ trap_init_percpu(void)
 	// when we trap to the kernel.
 	int cpu_num = cpunum();
 
-	struct Taskstate ts = thiscpu->cpu_ts;
-	ts.ts_esp0 = KSTACKTOP - cpu_num * (KSTKSIZE + KSTKGAP);//percpu_kstacks[cpu_num];
-
-	//cprintf("addr1= %x ;addr2= %x", ts.ts_esp0, percpu_kstacks[cpu_num]);
-	ts.ts_ss0 = GD_KD;
-
-	// Initialize the TSS slot of the gdt.
-	gdt[(GD_TSS0 >> 3) + cpu_num] = SEG16(STS_T32A, (uint32_t) (&ts),
+	thiscpu->cpu_ts.ts_esp0 = KSTACKTOP - cpu_num * (KSTKSIZE + KSTKGAP);
+	thiscpu->cpu_ts.ts_ss0 = GD_KD;
+	gdt[(GD_TSS0 >> 3) + cpu_num] = SEG16(STS_T32A, (uint32_t) (&(thiscpu->cpu_ts)),
 					sizeof(struct Taskstate), 0);
 	gdt[(GD_TSS0 >> 3) + cpu_num].sd_s = 0;
-
-	// Load the TSS selector (like other segment selectors, the
-	// bottom three bits are special; we leave them 0)
 	ltr(GD_TSS0 + (cpu_num << 3));
-
-	// Load the IDT
 	lidt(&idt_pd);
+
+
 }
 
 void
@@ -185,7 +177,7 @@ trap_dispatch(struct Trapframe *tf)
 	// Handle processor exceptions.
 	// LAB 3: Your code here.
 	uint32_t trap_num = tf->tf_trapno;
-	cprintf("trap_num %d \n", trap_num);
+	//cprintf("trap_num %d \n", trap_num);
 	if (trap_num == T_PGFLT) {
 		page_fault_handler(tf);
 	}
@@ -195,7 +187,7 @@ trap_dispatch(struct Trapframe *tf)
 	}
 
 	if (trap_num == T_SYSCALL) {
-		cprintf("enter system call! \n");
+		//cprintf("enter system call! \n");
 		int32_t res = syscall(tf->tf_regs.reg_eax, tf->tf_regs.reg_edx,
 				tf->tf_regs.reg_ecx, tf->tf_regs.reg_ebx, tf->tf_regs.reg_edi,
 				tf->tf_regs.reg_esi);
