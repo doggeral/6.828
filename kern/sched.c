@@ -57,7 +57,7 @@ sched_yield(void)
 			//cprintf("choose %d to run\n", next->env_id);
 			env_run(next);
 		}
-		else if (curenv->env_status == ENV_RUNNING) {
+		else if (curenv && curenv->env_status == ENV_RUNNING) {
 			env_run(curenv);
 		}
 	}

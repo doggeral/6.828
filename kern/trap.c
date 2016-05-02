@@ -327,11 +327,25 @@ page_fault_handler(struct Trapframe *tf)
 	//   (the 'tf' variable points at 'curenv->env_tf').
 
 	// LAB 4: Your code here.
+	cprintf("[%08x] user fault va %08x ip %08x\n", curenv->env_id, fault_va, tf->tf_eip);
+	print_trapframe(tf);
+
+	//check
+	cprintf("check stack overflow, user stack is %08x - %08x, exception stack is %08x - %08x, esp is %08x\n",
+			USTACKTOP, USTACKTOP - PGSIZE, UXSTACKTOP, UXSTACKTOP - PGSIZE,
+			tf->tf_esp);
+	if (tf->tf_esp > USTACKTOP && tf->tf_esp < (USTACKTOP - PGSIZE - 4 - sizeof(struct UTrapframe))) { /* exception stack overflow */
+		cprintf(
+				"exception stack overflow, user stack is %08x - %08x, exception stack is %08x - %08x, esp is %08x\n",
+				USTACKTOP, USTACKTOP - PGSIZE, UXSTACKTOP, UXSTACKTOP - PGSIZE,
+				tf->tf_esp);
+		env_destroy(curenv);	//not return
+	}
+
 	if (curenv->env_pgfault_upcall == NULL) {
 		env_destroy(curenv);
 		return;
 	}
-
 
 	struct UTrapframe* utrapframe;
 
