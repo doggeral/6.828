@@ -75,14 +75,14 @@ trap_init(void)
 	int i;
 	for(i = 0; i < 256; i++) {
 		if(i >= IRQ_OFFSET && i < T_SYSCALL) {
-    		SETGATE(idt[i], 0, GD_KT, vectors[i - T_TABLE_HOLE], 0);
+    		SETGATE(idt[i], 0, GD_KT, vectors[i], 0);
     	} else {
     		SETGATE(idt[i], 0, GD_KT, vectors[i], 0);
     	}
     }
     SETGATE(idt[T_DEBUG], 0, GD_KT, vectors[T_DEBUG], 3);
     SETGATE(idt[T_BRKPT], 0, GD_KT, vectors[T_BRKPT], 3);
-    SETGATE(idt[T_SYSCALL], 0, GD_KT, vectors[T_SYSCALL - T_TABLE_HOLE], 3);
+    SETGATE(idt[T_SYSCALL], 0, GD_KT, vectors[T_SYSCALL], 3);
 	// Per-CPU setup 
 	trap_init_percpu();
 }

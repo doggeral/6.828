@@ -112,6 +112,19 @@ TRAPHANDLER(vector17, T_ALIGN);				//17
 TRAPHANDLER_NOEC(vector18, T_MCHK);			//18
 TRAPHANDLER_NOEC(vector19, T_SIMDERR);		//19
 
+.long vector0
+.long vector0
+.long vector0
+.long vector0
+.long vector0
+.long vector0
+.long vector0
+.long vector0
+.long vector0
+.long vector0
+.long vector0
+.long vector0
+
 TRAPHANDLER_NOEC(vector32, 32);				//32
 TRAPHANDLER_NOEC(vector33, 33);
 TRAPHANDLER_NOEC(vector34, 34);
