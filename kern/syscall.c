@@ -333,7 +333,6 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 {
 	// LAB 4: Your code here.
 	//panic("sys_ipc_try_send not implemented");
-
 	struct Env* targetEnv;
 
 	int res = envid2env(envid, &targetEnv, 0);
@@ -349,33 +348,38 @@ sys_ipc_try_send(envid_t envid, uint32_t value, void *srcva, unsigned perm)
 			return -E_INVAL;
 	}
 
-	pte_t *pte;
-	struct PageInfo *data;
+	
+	targetEnv->env_ipc_perm = 0;
+	
 
-	data = page_lookup((pde_t *)curenv->env_pgdir, srcva, &pte);
+	if(perm != 0 && targetEnv->env_ipc_dstva < (void *)UTOP) {
+		pte_t *pte;
+		struct PageInfo *data;
 
-	if (data == NULL) {
-		return -E_INVAL;
-	}
+		data = page_lookup((pde_t *)curenv->env_pgdir, srcva, &pte);
 
-	if ((*pte & PTE_W) == 0 && (perm & PTE_W) > 0) {
-		return -E_INVAL;
-	}
-
-	if (targetEnv->env_ipc_dstva != 0) {
-		if (page_insert(targetEnv->env_pgdir, data, targetEnv->env_ipc_dstva, perm) < 0) {
-			return -E_NO_MEM;
+		if (data == NULL) {
+			return -E_INVAL;
 		}
-		targetEnv->env_ipc_perm = perm;
+
+		if ((*pte & PTE_W) == 0 && (perm & PTE_W) > 0) {
+			return -E_INVAL;
+		}
+
+		if (targetEnv->env_ipc_dstva != 0) {
+			if (page_insert(targetEnv->env_pgdir, data, targetEnv->env_ipc_dstva, perm) < 0) {
+				return -E_NO_MEM;
+			}
+			targetEnv->env_ipc_perm = perm;
+		}
 	}
 
-	targetEnv->env_ipc_recving = 0;
+	targetEnv->env_ipc_recving = false;
 	targetEnv->env_ipc_from = curenv->env_id;
 	targetEnv->env_ipc_value = value;
-	targetEnv->env_tf.tf_regs.reg_eax = 0;
 	targetEnv->env_status = ENV_RUNNABLE;
-
 	return 0;
+
 }
 
 // Block until a value is ready.  Record that you want to receive
@@ -400,9 +404,11 @@ sys_ipc_recv(void *dstva)
 
 	curenv->env_ipc_dstva = dstva;
 	curenv->env_ipc_recving = 1;
-	curenv->env_ipc_from = 0;
+	curenv->env_tf.tf_regs.reg_eax = 0;
 	curenv->env_status = ENV_NOT_RUNNABLE;
 	sched_yield ();
+	
+	return 0;
 }
 
 // Dispatches to the correct kernel function, passing the arguments.
