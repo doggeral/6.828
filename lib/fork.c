@@ -7,6 +7,7 @@
 // It is one of the bits explicitly allocated to user processes (PTE_AVAIL).
 #define PTE_COW		0x800
 
+#define PGNUM(la)	(((uintptr_t) (la)) >> PTXSHIFT)
 //
 // Custom page fault handler - if faulting page is copy-on-write,
 // map in our own private writable copy.
@@ -33,8 +34,11 @@ pgfault(struct UTrapframe *utf)
 	//   You should make three system calls.
 
 	// LAB 4: Your code here.
+	sys_page_alloc(0, (void *)PFTEMP, PTE_U|PTE_P|PTE_W);
+	addr = ROUNDDOWN (addr, PGSIZE);
+	memmove (PFTEMP, addr, PGSIZE);
 
-	panic("pgfault not implemented");
+	sys_page_map (0, PFTEMP, 0, addr, PTE_U|PTE_P|PTE_W);
 }
 
 //
@@ -54,7 +58,19 @@ duppage(envid_t envid, unsigned pn)
 	int r;
 
 	// LAB 4: Your code here.
-	panic("duppage not implemented");
+	//panic("duppage not implemented");
+	void * addr = (void *) ((uint32_t) pn * PGSIZE);
+	pte_t pte = uvpt[pn];
+	if ((pte & PTE_W) > 0 || (pte & PTE_COW) > 0) {
+		if ((r = sys_page_map(0, addr, envid, addr, PTE_U | PTE_P | PTE_COW))
+				< 0)
+			panic("duppage: page re-mapping failed at 1 : %e", r);
+		if ((r = sys_page_map(0, addr, 0, addr, PTE_U | PTE_P | PTE_COW)) < 0)
+			panic("duppage: page re-mapping failed at 2 : %e", r);
+	} else {
+		if ((r = sys_page_map(0, addr, envid, addr, PTE_U | PTE_P)) < 0)
+			panic("duppage: page re-mapping failed at 3 : %e", r);
+	}
 	return 0;
 }
 
@@ -78,7 +94,63 @@ envid_t
 fork(void)
 {
 	// LAB 4: Your code here.
-	panic("fork not implemented");
+	//panic("fork not implemented");
+	
+	int r;
+	// set up our page fault handler appropriately.
+	set_pgfault_handler(pgfault);
+
+	// Create a child.
+	envid_t envid;
+	envid = sys_exofork();
+	if (envid < 0)
+		panic("sys_exofork: %e", envid);
+	if (envid == 0) {
+		// We're the child.
+		thisenv = &envs[ENVX(sys_getenvid())];
+		return 0;
+	}
+
+	// Copy our address space to the child.
+	uint8_t *addr;
+	extern unsigned char end[];
+	for (addr = 0; addr < (uint8_t *)UTOP; addr += PGSIZE){
+		unsigned pn = PGNUM(addr);
+		if (!(uvpd[PDX(pn<<PGSHIFT)] & PTE_P)) { 
+			continue;
+		}
+		pte_t ptep = uvpt[pn];
+		if((ptep & (PTE_U | PTE_P)) != (PTE_P|PTE_U)) {
+			continue;
+		}
+		if(pn * PGSIZE == UXSTACKTOP - PGSIZE){
+			assert((ptep & (PTE_U | PTE_P | PTE_W)) == (PTE_U | PTE_P | PTE_W));
+			continue;
+		}
+		if(pn * PGSIZE == USTACKTOP - PGSIZE) {
+			assert((ptep & (PTE_U | PTE_P | PTE_W)) == (PTE_U | PTE_P | PTE_W));
+		}
+		r = duppage(envid, pn);
+		assert(r == 0);
+	}
+	
+	//set page fault handler
+	r = sys_page_alloc(envid, (void *)(UXSTACKTOP - PGSIZE), PTE_U|PTE_P|PTE_W);
+	if(r != 0) {
+		panic("fail to alloc UXSTACK, %e",r);
+	}
+	/* int sys_env_set_pgfault_upcall(envid_t envid, void *func) */
+	r = sys_env_set_pgfault_upcall(envid, thisenv->env_pgfault_upcall);
+	if(r != 0) {
+		panic("fail to sys_env_set_pgfault_upcall, %e", r);
+	}
+
+	r = sys_env_set_status(envid, ENV_RUNNABLE);
+	if(r != 0) {
+		panic("fail to sys_env_set_status, %e", r);
+	}
+
+	return envid;
 }
 
 // Challenge!

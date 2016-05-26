@@ -68,6 +68,9 @@ dumbfork(void)
 	for (addr = (uint8_t*) UTEXT; addr < end; addr += PGSIZE)
 		duppage(envid, addr);
 
+	cprintf("end = %x\n", end);
+	cprintf("addr = %x\n", addr);
+	cprintf("&addr = %x\n", &addr);
 	// Also copy the stack we are currently running on.
 	duppage(envid, ROUNDDOWN(&addr, PGSIZE));
 
